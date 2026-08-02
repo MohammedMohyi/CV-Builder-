@@ -366,6 +366,8 @@
     <div class="actions">
       <button class="primary-btn" onclick="window.print()">Download as PDF</button>
       <p class="hint">This opens your browser's print dialog — choose "Save as PDF" as the destination.</p>
+      <button class="primary-btn" onclick="downloadWord()" style="margin-top:10px;background:#2b579a;">Download as Word (.doc)</button>
+      <p class="hint">Downloads a .doc file you can open and further edit in Microsoft Word or Google Docs.</p>
     </div>
   </div>
 
@@ -388,6 +390,145 @@ function addExperience(){ state.experience.push({}); renderForm(); render(); }
 function addCertificate(){ state.certificates.push({}); renderForm(); render(); }
 function addProject(){ state.projects.push({}); renderForm(); render(); }
 function removeItem(arr, idx){ state[arr].splice(idx,1); renderForm(); render(); }
+
+/* ---------------- WORD (.doc) EXPORT ---------------- */
+/* Word's engine doesn't support flexbox or ::before content, so this builds
+   a parallel, table-based version of the CV with real bullet characters. */
+function renderWordDoc(d){
+  const F = 'font-family:Calibri,Arial,sans-serif;';
+  const row = (leftHtml, rightHtml) => `
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0;"><tr>
+      <td style="${F}vertical-align:baseline;">${leftHtml}</td>
+      <td align="right" style="${F}vertical-align:baseline;white-space:nowrap;font-size:11pt;font-weight:600;color:#3a3a3a;">${rightHtml}</td>
+    </tr></table>`;
+  const bullets = (text) => text ? `<ul style="margin:4px 0 0 0;padding:0;list-style:none;">${
+    text.split('\n').filter(Boolean).map(b=>`<li style="${F}font-size:10.5pt;color:#3a3a3a;margin-bottom:3px;">&middot;&nbsp;&nbsp;${escapeHtml(b)}</li>`).join('')
+  }</ul>` : '';
+
+  const contactLine = [d.phone, d.email, d.location, d.linkedin, d.github].filter(Boolean).map(escapeHtml).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
+  const availLine = [d.availfrom?`Available from ${d.availfrom}`:'', d.availdur].filter(Boolean).join(' &middot; ');
+  const summaryHtml = d.summary ? escapeHtml(d.summary) : 'Write your internship objective';
+  const skillsHtml = d.skills.length ? d.skills.map(escapeHtml).join('&nbsp;&nbsp;|&nbsp;&nbsp;') : 'List your skills';
+
+  const sectionHeader = (title) => `<div style="${F}font-size:12pt;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a1a;border-bottom:1px solid #1a1a1a;padding-bottom:4px;margin:0 0 8px 0;">${title}</div>`;
+
+  const eduHtml = d.edu.map(e=>{
+    const metaBits = [e.gpa?`GPA: ${e.gpa}`:'', e.gradyear?`Expected Graduation: ${e.gradyear}`:''].filter(Boolean).map(escapeHtml).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
+    return `<div style="margin-bottom:12px;">
+      ${row(`<b style="${F}font-size:11pt;color:#1a1a1a;">${escapeHtml(e.degree||'')}${e.institution?` | ${escapeHtml(e.institution)}`:''}</b>`, escapeHtml(e.dates||''))}
+      ${metaBits?`<div style="${F}font-size:10pt;color:#666;margin-top:2px;">${metaBits}</div>`:''}
+      ${e.coursework?`<div style="${F}font-size:10pt;color:#666;margin-top:2px;"><i>Relevant Coursework:</i> ${escapeHtml(e.coursework)}</div>`:''}
+      ${e.details?`<div style="${F}font-size:10.5pt;color:#3a3a3a;margin-top:2px;">${escapeHtml(e.details)}</div>`:''}
+    </div>`;
+  }).join('') || '<div>Add your education</div>';
+
+  const expHtml = d.exp.map(e=>`<div style="margin-bottom:12px;">
+      ${row(`<b style="${F}font-size:11pt;color:#1a1a1a;">${escapeHtml(e.title||'')}</b>${e.company?` <span style="${F}color:#3a3a3a;">| ${escapeHtml(e.company)}</span>`:''}`, escapeHtml(e.dates||''))}
+      ${bullets(e.bullets)}
+    </div>`).join('') || '<div>No experience yet</div>';
+
+  const certHtml = d.cert.map(c=>`<div style="margin-bottom:8px;${F}font-size:11pt;color:#1a1a1a;">${c.link?`<a href="${escapeHtml(c.link)}" style="color:#1a1a1a;">${escapeHtml(c.name)}</a>`:escapeHtml(c.name)}</div>`).join('') || '<div>List your certifications</div>';
+
+  const projHtml = d.proj.map(p=>`<div style="margin-bottom:12px;">
+      ${row(`<b style="${F}font-size:11pt;color:#1a1a1a;">${p.link?`<a href="${escapeHtml(p.link)}" style="color:#1a1a1a;">${escapeHtml(p.name)}</a>`:escapeHtml(p.name)}</b>`, escapeHtml(p.dates||''))}
+      ${bullets(p.bullets)}
+    </div>`).join('');
+
+  return `
+    <div style="${F}font-family:Georgia,'Times New Roman',serif;font-size:22pt;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a1a;">${escapeHtml(d.name)}</div>
+    ${d.jobtitle?`<div style="${F}font-size:10.5pt;letter-spacing:1px;text-transform:uppercase;color:#333;margin-top:8px;">${escapeHtml(d.jobtitle)}</div>`:''}
+    <div style="${F}font-size:10.5pt;color:#333;margin-top:6px;">${contactLine}</div>
+    ${availLine?`<div style="${F}font-size:10.5pt;color:#333;margin-top:2px;">${escapeHtml(availLine)}</div>`:''}
+    <div style="border-bottom:1px solid #1a1a1a;margin:12px 0 20px 0;"></div>
+
+    <div style="margin-bottom:18px;">
+      ${sectionHeader('Objective')}
+      <div style="${F}font-size:10.5pt;color:#3a3a3a;line-height:1.5;">${summaryHtml}</div>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      ${sectionHeader('Education')}
+      ${eduHtml}
+    </div>
+
+    <div style="margin-bottom:18px;">
+      ${sectionHeader('Skills')}
+      <div style="${F}font-size:10.5pt;color:#3a3a3a;line-height:1.6;">${skillsHtml}</div>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      ${sectionHeader('Experience &amp; Internships')}
+      ${expHtml}
+    </div>
+
+    <div style="margin-bottom:18px;">
+      ${sectionHeader('Certifications')}
+      ${certHtml}
+    </div>
+
+    ${projHtml?`<div style="margin-bottom:18px;">
+      ${sectionHeader('Projects')}
+      ${projHtml}
+    </div>`:''}
+  `;
+}
+
+function downloadWord(){
+  const d = {
+    name: val('f-name') || 'Your Full Name',
+    jobtitle: val('f-jobtitle'),
+    email: val('f-email'),
+    phone: val('f-phone'),
+    location: val('f-location'),
+    linkedin: val('f-linkedin'),
+    github: val('f-github'),
+    availfrom: val('f-availfrom'),
+    availdur: val('f-availdur'),
+    summary: val('f-summary'),
+    skills: val('f-skills').split('\n').map(s=>s.trim()).filter(Boolean),
+    edu: state.education.filter(e=>e.degree||e.institution),
+    exp: state.experience.filter(e=>e.title||e.company),
+    proj: state.projects.filter(p=>p.name),
+    cert: state.certificates.filter(c=>c.name)
+  };
+
+  const bodyHtml = renderWordDoc(d);
+  const fullHtml = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(d.name)} - CV</title>
+<!--[if gte mso 9]>
+<xml>
+<w:WordDocument>
+<w:View>Print</w:View>
+<w:Zoom>100</w:Zoom>
+<w:DoNotOptimizeForBrowser/>
+</w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+  @page Section1 { size:8.5in 11.0in; margin:0.6in 0.7in 0.6in 0.7in; }
+  div.Section1 { page:Section1; }
+  body{margin:0;}
+</style>
+</head>
+<body>
+<div class="Section1">${bodyHtml}</div>
+</body>
+</html>`;
+
+  const blob = new Blob(['\ufeff', fullHtml], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = (val('f-name') || 'CV').trim().replace(/[^a-z0-9]+/gi, '_');
+  a.href = url;
+  a.download = `${safeName}_CV.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 function escapeHtml(str){
   return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
